@@ -18,8 +18,8 @@ import {
   __toESM
 } from "/build/_shared/chunk-PNG5AS42.js";
 
-// app/tailwind.css
-var tailwind_default = "/build/_assets/tailwind-VNPDJ7VC.css";
+// app/tailwind.css?url
+var tailwind_default = "/build/_assets/tailwind-VNPDJ7VC.css?url";
 
 // app/root.tsx
 var import_jsx_dev_runtime = __toESM(require_jsx_dev_runtime(), 1);
@@ -109,4 +109,4 @@ export {
   links,
   meta
 };
-//# sourceMappingURL=/build/root-F4U2IQBK.js.map
+//# sourceMappingURL=/build/root-JVLXVVIT.js.map
