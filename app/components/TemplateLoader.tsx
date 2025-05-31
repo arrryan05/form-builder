@@ -1,3 +1,5 @@
+// app/components/TemplateLoader.tsx
+
 import { useState } from "react";
 import { useFormStore } from "~/stores/form";
 import { CONTACT_US, FEEDBACK } from "~/utils/templates";
@@ -9,11 +11,13 @@ const TEMPLATES = [
 
 export function TemplateLoader() {
   const loadTemplate = useFormStore((s) => s.loadTemplate);
-  const [choice, setChoice] = useState(TEMPLATES[0].name);
+  const [choice, setChoice] = useState<string>(TEMPLATES[0].name);
 
   const apply = () => {
     const tpl = TEMPLATES.find((t) => t.name === choice);
-    if (tpl) loadTemplate(tpl.data);
+    if (tpl) {
+      loadTemplate(tpl.data);
+    }
   };
 
   return (
@@ -22,7 +26,7 @@ export function TemplateLoader() {
       <select
         value={choice}
         onChange={(e) => setChoice(e.target.value)}
-        className="w-full border rounded p-1"
+        className="w-full border rounded p-1 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
       >
         {TEMPLATES.map((t) => (
           <option key={t.name} value={t.name}>

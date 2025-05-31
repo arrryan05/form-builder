@@ -1,14 +1,153 @@
+// // app/routes/index.tsx
+
+// import React, { useState } from "react";
+// import {
+//   DndContext,
+//   DragStartEvent,
+//   DragEndEvent,
+//   DragOverlay,
+//   closestCenter,
+//   PointerSensor,
+//   MouseSensor,
+//   useSensors,
+//   useSensor,
+// } from "@dnd-kit/core";
+// import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+
+// import { useThemeStore } from "~/stores/theme";
+// import { useFormStore } from "~/stores/form";
+// import { FieldPalette } from "~/components/FieldPalette";
+// import { FieldCanvas } from "~/components/FieldCanvas";
+// import { FieldConfigPanel } from "~/components/FieldConfigPanel";
+// import { StepTabs } from "~/components/StepTabs";
+// import { MultiStepPreview } from "~/components/MultiStepPreview";
+// import { TemplateLoader } from "~/components/TemplateLoader";
+// import { Link } from "@remix-run/react";
+
+// export default function Index() {
+//   // ─── THEME: subscribe only to `theme` and `toggle` explicitly ───
+//   const theme = useThemeStore((s) => s.theme);
+//   const toggle = useThemeStore((s) => s.toggle);
+
+//   // This log should now appear only on actual theme change or fields change:
+//   console.log("🔄 [Index] render");
+
+//   // ─── FORM: subscribe only to the slices you need ─────────────────
+//   const fields = useFormStore((s) => s.fields);
+//   const addField = useFormStore((s) => s.addField);
+//   const moveFieldWithinStep = useFormStore((s) => s.moveFieldWithinStep);
+
+//   // ─── Drag ghost overlay for palette items ───────────────────────
+//   const [overlayContent, setOverlayContent] = useState<React.ReactNode>(null);
+
+//   // ─── DnD sensors: pointer & mouse ───────────────────────────────
+//   const sensors = useSensors(
+//     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+//     useSensor(MouseSensor)
+//   );
+
+//   function handleDragStart(e: DragStartEvent) {
+//     const type = e.active.data.current?.type;
+//     if (type) {
+//       setOverlayContent(<div className="p-2 bg-blue-200 rounded">{type}</div>);
+//     }
+//   }
+
+//   function handleDragEnd(e: DragEndEvent) {
+//     const { active, over } = e;
+//     setOverlayContent(null);
+
+//     // If dragging from the palette (has data.type), add a new field:
+//     if (active.data.current?.type) {
+//       addField(active.data.current.type);
+//       return;
+//     }
+
+//     // Otherwise, reorder within the currently selected step
+//     if (over && active.id !== over.id) {
+//       const oldIndex = fields.findIndex((f) => f.id === active.id);
+//       const newIndex = fields.findIndex((f) => f.id === over.id);
+//       if (oldIndex > -1 && newIndex > -1) {
+//         moveFieldWithinStep(oldIndex, newIndex);
+//       }
+//     }
+//   }
+
+//   return (
+//     <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+//       {/* Header */}
+//       <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700">
+//         <div className="flex-1">
+//           <h1 className="text-xl font-bold">Multi-Step Form Builder</h1>
+//         </div>
+//         <div className="flex-1 flex justify-center">
+//           <Link to="/dashboard" className="text-blue-600 underline">
+//             Dashboard
+//           </Link>
+//         </div>
+//         <div className="flex-1 flex justify-end">
+//           <button
+//             onClick={toggle}
+//             className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700"
+//           >
+//             {theme === "light" ? "Dark" : "Light"} Mode
+//           </button>
+//         </div>
+//       </header>
+
+//       {/* Main: three-column layout (responsive) */}
+//       <DndContext
+//         sensors={sensors}
+//         collisionDetection={closestCenter}
+//         onDragStart={handleDragStart}
+//         onDragEnd={handleDragEnd}
+//       >
+//         <main className="grid grid-cols-1 grid-rows-[auto_auto_auto] md:grid-cols-[280px_1fr_1fr] md:grid-rows-none gap-4 flex-1 p-4 overflow-hidden">
+//           {/* Sidebar: TemplateLoader, FieldPalette, FieldConfigPanel */}
+//           <aside className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-4 overflow-auto space-y-4">
+//             <TemplateLoader />
+//             <FieldPalette />
+//             <FieldConfigPanel />
+//           </aside>
+
+//           {/* Builder Canvas (middle) */}
+//           <section className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-4 overflow-auto flex flex-col">
+//             <StepTabs />
+//             <div className="flex-1 overflow-auto p-2 bg-gray-50 dark:bg-gray-900 rounded shadow">
+//               <SortableContext
+//                 items={fields.map((f) => f.id)}
+//                 strategy={verticalListSortingStrategy}
+//               >
+//                 <FieldCanvas />
+//               </SortableContext>
+//             </div>
+//           </section>
+
+//           {/* Multi-Step Preview (right) */}
+//           <section className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-4 overflow-auto flex flex-col items-center">
+//             <MultiStepPreview />
+//           </section>
+//         </main>
+
+//         <DragOverlay dropAnimation={{ duration: 150 }}>{overlayContent}</DragOverlay>
+//       </DndContext>
+//     </div>
+//   );
+// }
+
+// app/routes/index.tsx
+
 import React, { useState } from "react";
 import {
   DndContext,
-  DragEndEvent,
   DragStartEvent,
+  DragEndEvent,
   DragOverlay,
   closestCenter,
   PointerSensor,
   MouseSensor,
-  useSensor,
   useSensors,
+  useSensor,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -20,19 +159,26 @@ import { useFormStore } from "~/stores/form";
 import { FieldPalette } from "~/components/FieldPalette";
 import { FieldCanvas } from "~/components/FieldCanvas";
 import { FieldConfigPanel } from "~/components/FieldConfigPanel";
-import { FormPreview } from "~/components/FormPreview";
-import { SaveLoadControls } from "~/components/SaveLoadControls";
+import { StepTabs } from "~/components/StepTabs";
+import { MultiStepPreview } from "~/components/MultiStepPreview";
 import { TemplateLoader } from "~/components/TemplateLoader";
-import { FormCreatorControls } from "~/components/FormCreatorControl";
 import { Link } from "@remix-run/react";
+import { SaveLoadControls } from "~/components/SaveLoadControls";
 
 export default function Index() {
-  const { theme, toggle } = useThemeStore();
-  const { fields, addField, moveField } = useFormStore();
+  // ─── THEME: subscribe only to `theme` and `toggle` explicitly ───
+  const theme = useThemeStore((s) => s.theme);
+  const toggle = useThemeStore((s) => s.toggle);
 
-  // Ghost overlay
-  const [overlayContent, setOverlayContent] = useState<React.ReactNode>(null);
-  // Preview device mode
+  console.log("🔄 [Index] render");
+
+  // ─── FORM: subscribe only to the slices you need ─────────────────
+  const fields = useFormStore((s) => s.fields);
+  const addField = useFormStore((s) => s.addField);
+  const moveFieldWithinStep = useFormStore((s) => s.moveFieldWithinStep);
+
+  // ─── DEVICE PREVIEW STATE ───────────────────────────────────────
+  // Modes: "desktop" (768px), "tablet" (512px), "mobile" (320px)
   const [mode, setMode] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const widths = {
     desktop: "w-[768px]",
@@ -40,48 +186,53 @@ export default function Index() {
     mobile: "w-[320px]",
   };
 
-  // DnD sensors
+  // ─── Drag ghost overlay for palette items ───────────────────────
+  const [overlayContent, setOverlayContent] = useState<React.ReactNode>(null);
+
+  // ─── DnD sensors: pointer & mouse ───────────────────────────────
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(MouseSensor)
   );
 
-  const handleDragStart = (e: DragStartEvent) => {
+  function handleDragStart(e: DragStartEvent) {
     const type = e.active.data.current?.type;
-    if (type)
-      setOverlayContent(<div className="p-2 rounded bg-blue-200">{type}</div>);
-  };
+    if (type) {
+      setOverlayContent(<div className="p-2 bg-blue-200 rounded">{type}</div>);
+    }
+  }
 
-  const handleDragEnd = (e: DragEndEvent) => {
+  function handleDragEnd(e: DragEndEvent) {
     const { active, over } = e;
     setOverlayContent(null);
-    // Add new field
+
+    // If dragging from the palette (has data.type), add a new field:
     if (active.data.current?.type) {
       addField(active.data.current.type);
       return;
     }
-    // Reorder
+
+    // Otherwise, reorder within the currently selected step
     if (over && active.id !== over.id) {
       const oldIndex = fields.findIndex((f) => f.id === active.id);
       const newIndex = fields.findIndex((f) => f.id === over.id);
-      if (oldIndex > -1 && newIndex > -1) moveField(oldIndex, newIndex);
+      if (oldIndex > -1 && newIndex > -1) {
+        moveFieldWithinStep(oldIndex, newIndex);
+      }
     }
-  };
+  }
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       {/* Header */}
-      <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+      <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700">
         <div className="flex-1">
-          <h1 className="text-xl font-bold">Form Builder</h1>
+          <h1 className="text-xl font-bold">Multi-Step Form Builder</h1>
         </div>
-        <div className="flex-1 flex justify-center items-center">
-          <FormCreatorControls />
+        <div className="flex-1 flex justify-center">
+          <SaveLoadControls />
         </div>
         <div className="flex-1 flex justify-end">
-          <Link to="/dashboard" className="text-white-600">
-            Dashboard
-          </Link>
           <button
             onClick={toggle}
             className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700"
@@ -91,38 +242,37 @@ export default function Index() {
         </div>
       </header>
 
-      {/* Main Grid */}
+      {/* Main: three-column layout (responsive) */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        {/* Responsive grid: sidebar 280px, builder 1fr, preview 2fr on md+ */}
-        <main className="grid grid-cols-1 grid-rows-[auto_auto_auto] md:grid-cols-[280px_1fr_2fr] md:grid-rows-none gap-4 flex-1 p-4 overflow-hidden">
-          {/* Left Sidebar */}
-          <aside className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-4 overflow-auto">
-            <FieldPalette />
+        <main className="grid grid-cols-1 grid-rows-[auto_auto_auto] md:grid-cols-[280px_1fr_1.5fr] md:grid-rows-none gap-4 flex-1 p-4 overflow-hidden">
+          {/* Sidebar: TemplateLoader, FieldPalette, FieldConfigPanel */}
+          <aside className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-4 overflow-auto space-y-4">
             <TemplateLoader />
-
-            <div className="mt-6">
-              <FieldConfigPanel />
-            </div>
+            <FieldPalette />
+            <FieldConfigPanel />
           </aside>
 
-          {/* Builder Canvas (narrower) */}
-          <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-4 overflow-auto">
-            <h2 className="text-lg font-semibold mb-4">Builder Canvas</h2>
-            <SortableContext
-              items={fields.map((f) => f.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <FieldCanvas />
-            </SortableContext>
+          {/* Builder Canvas (middle) */}
+          <section className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-4 overflow-auto flex flex-col">
+            <StepTabs />
+            <div className="flex-1 overflow-auto p-2 bg-gray-50 dark:bg-gray-900 rounded shadow">
+              <SortableContext
+                items={fields.map((f) => f.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <FieldCanvas />
+              </SortableContext>
+            </div>
           </section>
 
-          {/* Live Preview (wider) */}
-          <section className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-4 overflow-auto flex flex-col items-center">
+          {/* Device‐mode Preview Panel (right) */}
+          <section className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-4 overflow-auto flex flex-col items-center">
+            {/* Toggle Buttons */}
             <div className="mb-4 space-x-2">
               {(["desktop", "tablet", "mobile"] as const).map((m) => (
                 <button
@@ -138,13 +288,14 @@ export default function Index() {
                 </button>
               ))}
             </div>
+
+            {/* Preview Container (width controlled by `mode`) */}
             <div className={`border p-4 ${widths[mode]} mx-auto`}>
-              <FormPreview />
+              <MultiStepPreview />
             </div>
           </section>
         </main>
 
-        {/* Drag Overlay */}
         <DragOverlay dropAnimation={{ duration: 150 }}>
           {overlayContent}
         </DragOverlay>

@@ -1,25 +1,22 @@
 import {
-  Link
-} from "/build/_shared/chunk-SEBFG7SO.js";
-import {
-  require_react_dom
-} from "/build/_shared/chunk-U4FRFQSK.js";
-import {
   require_jsx_dev_runtime
 } from "/build/_shared/chunk-XGOTYLZ5.js";
-import {
-  require_react
-} from "/build/_shared/chunk-7M6SC7J5.js";
 import {
   createHotContext
 } from "/build/_shared/chunk-VNQCXQXQ.js";
 import "/build/_shared/chunk-UWV35TSL.js";
 import {
+  require_react_dom
+} from "/build/_shared/chunk-U4FRFQSK.js";
+import {
+  require_react
+} from "/build/_shared/chunk-7M6SC7J5.js";
+import {
   __toESM
 } from "/build/_shared/chunk-PNG5AS42.js";
 
 // app/routes/_index.tsx
-var import_react9 = __toESM(require_react(), 1);
+var import_react11 = __toESM(require_react(), 1);
 
 // node_modules/@dnd-kit/core/dist/core.esm.js
 var import_react3 = __toESM(require_react());
@@ -4280,43 +4277,58 @@ if (import.meta) {
     //@ts-expect-error
     "app\\stores\\form.ts"
   );
-  import.meta.hot.lastModified = "1748543802040.5608";
+  import.meta.hot.lastModified = "1748707315190.4539";
 }
-var useFormStore = create((set, get) => ({
-  title: "Untitled Form",
-  fields: [],
-  selectedId: null,
-  formId: null,
-  createForm: () => {
-    const id = nanoid();
-    const { title, fields } = get();
-    const schema = { id, title, fields };
-    localStorage.setItem(`form-schema-${id}`, JSON.stringify(schema));
-    const existing = JSON.parse(
-      localStorage.getItem("form-ids") || "[]"
-    );
-    localStorage.setItem(
-      "form-ids",
-      JSON.stringify([...existing, id])
-    );
-    set({ formId: id });
-    return id;
-  },
-  getFormIds: () => {
-    return JSON.parse(localStorage.getItem("form-ids") || "[]");
-  },
-  loadTemplate: (template) => set(() => ({
-    title: template.title,
-    fields: template.fields.map((f) => ({ ...f, id: nanoid() })),
-    selectedId: null
-  })),
-  addField: (type) => set((s) => ({
-    fields: [
-      ...s.fields,
-      {
-        id: nanoid(),
+var useFormStore = create((set, get) => {
+  console.log("\u23F3 [form store] initializing\u2026");
+  const firstStepId = nanoid();
+  return {
+    title: "Untitled Multi-Step Form",
+    steps: [{ id: firstStepId, title: "Step 1", fieldIds: [] }],
+    selectedStep: firstStepId,
+    fields: [],
+    selectedFieldId: null,
+    // ─── Step Actions ────────────────────────────────────────────
+    addStep: (title) => {
+      const newId = nanoid();
+      const newStep = { id: newId, title, fieldIds: [] };
+      set((state) => ({
+        steps: [...state.steps, newStep],
+        selectedStep: state.selectedStep || newId
+      }));
+    },
+    selectStep: (stepId) => set({ selectedStep: stepId, selectedFieldId: null }),
+    renameStep: (stepId, newTitle) => set((state) => ({
+      steps: state.steps.map(
+        (s) => s.id === stepId ? { ...s, title: newTitle } : s
+      )
+    })),
+    deleteStep: (stepId) => set((state) => {
+      if (state.steps.length === 1)
+        return {};
+      const toRemove = new Set(
+        state.steps.find((s) => s.id === stepId).fieldIds
+      );
+      const newFields = state.fields.filter((f) => !toRemove.has(f.id));
+      const newSteps = state.steps.filter((s) => s.id !== stepId);
+      const newSelected = state.selectedStep === stepId ? newSteps[0].id : state.selectedStep;
+      return {
+        steps: newSteps,
+        fields: newFields,
+        selectedStep: newSelected,
+        selectedFieldId: null
+      };
+    }),
+    // ─── Field Actions ──────────────────────────────────────────────
+    addField: (type) => {
+      const stepId = get().selectedStep;
+      if (!stepId)
+        return;
+      const newId = nanoid();
+      const newField = {
+        id: newId,
         type,
-        label: `${type} label`,
+        label: `${type.charAt(0).toUpperCase() + type.slice(1)} Field`,
         placeholder: "",
         required: false,
         helpText: "",
@@ -4326,43 +4338,97 @@ var useFormStore = create((set, get) => ({
         options: type === "dropdown" || type === "checkbox" ? [
           { label: "Option 1", value: "option1" },
           { label: "Option 2", value: "option2" }
-        ] : void 0
+        ] : void 0,
+        stepId
+      };
+      set((state) => ({
+        fields: [...state.fields, newField],
+        steps: state.steps.map(
+          (s) => s.id === stepId ? { ...s, fieldIds: [...s.fieldIds, newId] } : s
+        )
+      }));
+    },
+    moveFieldWithinStep: (fromIndex, toIndex) => set((state) => {
+      const stepId = state.selectedStep;
+      if (!stepId)
+        return {};
+      const step = state.steps.find((s) => s.id === stepId);
+      const ids2 = [...step.fieldIds];
+      const [moved] = ids2.splice(fromIndex, 1);
+      ids2.splice(toIndex, 0, moved);
+      const newSteps = state.steps.map(
+        (s) => s.id === stepId ? { ...s, fieldIds: ids2 } : s
+      );
+      const otherFields = state.fields.filter((f) => f.stepId !== stepId);
+      const stepFieldsInOrder = ids2.map((fid) => state.fields.find((f) => f.id === fid)).filter(Boolean);
+      const newFields = [...otherFields, ...stepFieldsInOrder];
+      return { steps: newSteps, fields: newFields };
+    }),
+    selectField: (fieldId) => set({ selectedFieldId: fieldId }),
+    updateField: (fieldId, changes) => set((state) => ({
+      fields: state.fields.map(
+        (f) => f.id === fieldId ? { ...f, ...changes } : f
+      )
+    })),
+    // ─── Template Loader ────────────────────────────────────────────
+    loadTemplate: (template) => {
+      console.log("\u2611\uFE0F [form store] loadTemplate");
+      const stepId = nanoid();
+      const newStep = { id: stepId, title: template.title, fieldIds: [] };
+      const newFields = template.fields.map((f) => ({
+        ...f,
+        id: nanoid(),
+        stepId
+      }));
+      newStep.fieldIds = newFields.map((f) => f.id);
+      set(() => ({
+        title: template.title,
+        steps: [newStep],
+        selectedStep: stepId,
+        fields: newFields,
+        selectedFieldId: null
+      }));
+    },
+    // ─── Phase 4: Save / Load to localStorage under key “form-{key}” ───
+    saveToLocal: (key2) => {
+      const { title, steps, fields } = get();
+      const payload = { title, fields };
+      localStorage.setItem(`form-${key2}`, JSON.stringify(payload));
+      alert(`Form saved as \u201C${key2}\u201D`);
+    },
+    loadFromLocal: (key2) => {
+      try {
+        const raw = localStorage.getItem(`form-${key2}`);
+        if (!raw) {
+          alert(`No form found under key \u201C${key2}\u201D`);
+          return;
+        }
+        const { title, fields } = JSON.parse(raw);
+        const stepId = nanoid();
+        const reconstructedFields = fields.map((f) => ({
+          ...f,
+          id: nanoid(),
+          stepId
+        }));
+        const newStep = {
+          id: stepId,
+          title,
+          fieldIds: reconstructedFields.map((f) => f.id)
+        };
+        set(() => ({
+          title,
+          steps: [newStep],
+          selectedStep: stepId,
+          fields: reconstructedFields,
+          selectedFieldId: null
+        }));
+        alert(`Form loaded from \u201C${key2}\u201D`);
+      } catch {
+        alert(`Failed to parse form data for key \u201C${key2}\u201D`);
       }
-    ]
-  })),
-  moveField: (from, to) => set((s) => {
-    const f = [...s.fields];
-    const [m] = f.splice(from, 1);
-    f.splice(to, 0, m);
-    return { fields: f };
-  }),
-  selectField: (id) => set({ selectedId: id }),
-  updateField: (id, changes) => set((s) => ({
-    fields: s.fields.map((f) => f.id === id ? { ...f, ...changes } : f)
-  })),
-  // --- NEW ACTION: Save current form to localStorage under key
-  saveToLocal: (key2) => {
-    const { title, fields } = get();
-    const payload = { title, fields };
-    localStorage.setItem(`form-${key2}`, JSON.stringify(payload));
-    alert(`Form saved as \u201C${key2}\u201D`);
-  },
-  // --- NEW ACTION: Load form from localStorage by key
-  loadFromLocal: (key2) => {
-    const raw = localStorage.getItem(`form-${key2}`);
-    if (!raw) {
-      alert(`No form found under key \u201C${key2}\u201D`);
-      return;
     }
-    try {
-      const { title, fields } = JSON.parse(raw);
-      set({ title, fields, selectedId: null });
-      alert(`Form loaded from \u201C${key2}\u201D`);
-    } catch {
-      alert(`Failed to parse form data for key \u201C${key2}\u201D`);
-    }
-  }
-}));
+  };
+});
 
 // app/components/FieldPalette.tsx
 var import_jsx_dev_runtime = __toESM(require_jsx_dev_runtime(), 1);
@@ -4446,6 +4512,7 @@ window.$RefreshReg$ = prevRefreshReg;
 window.$RefreshSig$ = prevRefreshSig;
 
 // app/components/FieldCanvas.tsx
+var import_react6 = __toESM(require_react(), 1);
 var import_jsx_dev_runtime2 = __toESM(require_jsx_dev_runtime(), 1);
 if (!window.$RefreshReg$ || !window.$RefreshSig$ || !window.$RefreshRuntime$) {
   console.warn("remix:hmr: React Fast Refresh only works when the Remix compiler is running in development mode.");
@@ -4466,23 +4533,72 @@ if (import.meta) {
     //@ts-expect-error
     "app\\components\\FieldCanvas.tsx"
   );
-  import.meta.hot.lastModified = "1748460853608.4324";
+  import.meta.hot.lastModified = "1748707400146.6604";
 }
 function FieldCanvas() {
   _s2();
-  const fields = useFormStore((s) => s.fields);
-  return /* @__PURE__ */ (0, import_jsx_dev_runtime2.jsxDEV)(import_jsx_dev_runtime2.Fragment, { children: fields.map((field) => /* @__PURE__ */ (0, import_jsx_dev_runtime2.jsxDEV)(SortableField, { field }, field.id, false, {
+  const allFields = useFormStore((s) => s.fields);
+  const selectedStep = useFormStore((s) => s.selectedStep);
+  const fields = (0, import_react6.useMemo)(() => allFields.filter((f) => f.stepId === selectedStep), [allFields, selectedStep]);
+  console.log("\u{1F5C4}\uFE0F fieldcanvas");
+  const moveFieldWithinStep = useFormStore((s) => s.moveFieldWithinStep);
+  const [overlayContent, setOverlayContent] = (0, import_react6.useState)(null);
+  const sensors = useSensors(useSensor(PointerSensor, {
+    activationConstraint: {
+      distance: 5
+    }
+  }));
+  function handleDragStart(e) {
+    const f = fields.find((f2) => f2.id === e.active.id);
+    if (f) {
+      setOverlayContent(/* @__PURE__ */ (0, import_jsx_dev_runtime2.jsxDEV)("div", { className: "p-2 bg-blue-200 rounded", children: f.label }, void 0, false, {
+        fileName: "app/components/FieldCanvas.tsx",
+        lineNumber: 46,
+        columnNumber: 25
+      }, this));
+    }
+  }
+  function handleDragEnd(e) {
+    setOverlayContent(null);
+    const {
+      active,
+      over
+    } = e;
+    if (!over)
+      return;
+    if (active.id === over.id)
+      return;
+    const oldIndex = fields.findIndex((f) => f.id === active.id);
+    const newIndex = fields.findIndex((f) => f.id === over.id);
+    if (oldIndex > -1 && newIndex > -1) {
+      moveFieldWithinStep(oldIndex, newIndex);
+    }
+  }
+  return /* @__PURE__ */ (0, import_jsx_dev_runtime2.jsxDEV)(DndContext, { sensors, collisionDetection: closestCenter, onDragStart: handleDragStart, onDragEnd: handleDragEnd, children: [
+    /* @__PURE__ */ (0, import_jsx_dev_runtime2.jsxDEV)(SortableContext, { items: fields.map((f) => f.id), strategy: verticalListSortingStrategy, children: fields.map((field) => /* @__PURE__ */ (0, import_jsx_dev_runtime2.jsxDEV)(SortableField, { field }, field.id, false, {
+      fileName: "app/components/FieldCanvas.tsx",
+      lineNumber: 65,
+      columnNumber: 30
+    }, this)) }, void 0, false, {
+      fileName: "app/components/FieldCanvas.tsx",
+      lineNumber: 64,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ (0, import_jsx_dev_runtime2.jsxDEV)(DragOverlay, { dropAnimation: {
+      duration: 150
+    }, children: overlayContent }, void 0, false, {
+      fileName: "app/components/FieldCanvas.tsx",
+      lineNumber: 68,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
     fileName: "app/components/FieldCanvas.tsx",
-    lineNumber: 30,
-    columnNumber: 28
-  }, this)) }, void 0, false, {
-    fileName: "app/components/FieldCanvas.tsx",
-    lineNumber: 29,
+    lineNumber: 63,
     columnNumber: 10
   }, this);
 }
-_s2(FieldCanvas, "P5QfLFFR9Q/QqJEhe/sjyT0tBw4=", false, function() {
-  return [useFormStore];
+_s2(FieldCanvas, "7PayEH4ecthmRtM7oX2N8Zm5OTc=", false, function() {
+  return [useFormStore, useFormStore, useFormStore, useSensors, useSensor];
 });
 _c3 = FieldCanvas;
 function SortableField({
@@ -4502,20 +4618,27 @@ function SortableField({
     transform: CSS.Transform.toString(transform),
     transition
   };
-  const selectedId = useFormStore((s) => s.selectedId);
   const selectField = useFormStore((s) => s.selectField);
-  const isSelected = selectedId === field.id;
-  return /* @__PURE__ */ (0, import_jsx_dev_runtime2.jsxDEV)("div", { ref: setNodeRef, style, ...attributes, ...listeners, onClick: () => selectField(field.id), className: `p-4 mb-2 border rounded cursor-move dark:bg-gray-800 ${isSelected ? "border-blue-500 bg-blue-100 dark:bg-blue-900" : "bg-white dark:bg-gray-800"}`, children: [
-    field.type,
-    " \u2014 ",
-    field.label
+  const selectedFieldId = useFormStore((s) => s.selectedFieldId);
+  const isSelected = selectedFieldId === field.id;
+  return /* @__PURE__ */ (0, import_jsx_dev_runtime2.jsxDEV)("div", { ref: setNodeRef, style, ...attributes, ...listeners, onClick: () => selectField(field.id), className: `p-4 mb-2 border rounded cursor-move bg-white dark:bg-gray-800 ${isSelected ? "border-blue-500 bg-blue-100 dark:bg-blue-900" : ""}`, children: [
+    /* @__PURE__ */ (0, import_jsx_dev_runtime2.jsxDEV)("div", { className: "font-medium", children: field.label }, void 0, false, {
+      fileName: "app/components/FieldCanvas.tsx",
+      lineNumber: 100,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ (0, import_jsx_dev_runtime2.jsxDEV)("div", { className: "text-xs text-gray-500", children: field.type }, void 0, false, {
+      fileName: "app/components/FieldCanvas.tsx",
+      lineNumber: 101,
+      columnNumber: 7
+    }, this)
   ] }, void 0, true, {
     fileName: "app/components/FieldCanvas.tsx",
-    lineNumber: 57,
+    lineNumber: 99,
     columnNumber: 10
   }, this);
 }
-_s22(SortableField, "UKeBYXWCLtyf9RdqqkUaCGrTK0w=", false, function() {
+_s22(SortableField, "vDLDr8NW8uwii73lVCPVvMOkrzs=", false, function() {
   return [useSortable, useFormStore, useFormStore];
 });
 _c22 = SortableField;
@@ -4546,78 +4669,79 @@ if (import.meta) {
     //@ts-expect-error
     "app\\components\\FieldConfigPanel.tsx"
   );
-  import.meta.hot.lastModified = "1748458178260.1023";
+  import.meta.hot.lastModified = "1748707433060.6406";
 }
 function FieldConfigPanel() {
   _s3();
-  const selectedId = useFormStore((s) => s.selectedId);
-  const field = useFormStore((s) => s.fields.find((f) => f.id === selectedId));
-  const update = useFormStore((s) => s.updateField);
+  const selectedFieldId = useFormStore((s) => s.selectedFieldId);
+  const field = useFormStore((s) => s.fields.find((f) => f.id === selectedFieldId));
+  console.log("\u{1F504} [FieldConfigPanel] render");
+  const updateField = useFormStore((s) => s.updateField);
   if (!field) {
-    return /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { className: "p-2 text-gray-500", children: "Select a field to edit its properties" }, void 0, false, {
+    return /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { className: "p-2 text-gray-500 dark:text-gray-400", children: "Select a field to edit its properties" }, void 0, false, {
       fileName: "app/components/FieldConfigPanel.tsx",
-      lineNumber: 29,
+      lineNumber: 31,
       columnNumber: 12
     }, this);
   }
   const onChange = (key2) => (e) => {
     const value = key2 === "required" ? e.target.checked : e.target.value;
-    update(field.id, {
+    updateField(field.id, {
       [key2]: value
     });
   };
-  return /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { className: "p-2 space-y-4", children: [
-    /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("h3", { className: "font-semibold", children: "Field Properties" }, void 0, false, {
+  return /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { className: "p-2 bg-white dark:bg-gray-800 rounded shadow space-y-4", children: [
+    /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("h3", { className: "text-lg font-semibold", children: "Field Properties" }, void 0, false, {
       fileName: "app/components/FieldConfigPanel.tsx",
-      lineNumber: 38,
+      lineNumber: 42,
       columnNumber: 7
     }, this),
     /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { children: [
       /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("label", { className: "block text-sm", children: "Label" }, void 0, false, {
         fileName: "app/components/FieldConfigPanel.tsx",
-        lineNumber: 42,
+        lineNumber: 45,
         columnNumber: 9
       }, this),
-      /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "text", value: field.label, onChange: onChange("label"), className: "mt-1 block w-full border rounded p-1" }, void 0, false, {
+      /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "text", value: field.label, onChange: onChange("label"), className: "mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700" }, void 0, false, {
         fileName: "app/components/FieldConfigPanel.tsx",
-        lineNumber: 43,
+        lineNumber: 46,
         columnNumber: 9
       }, this)
     ] }, void 0, true, {
       fileName: "app/components/FieldConfigPanel.tsx",
-      lineNumber: 41,
+      lineNumber: 44,
       columnNumber: 7
     }, this),
-    field.type !== "checkbox" && /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { children: [
+    ["text", "textarea"].includes(field.type) && /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { children: [
       /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("label", { className: "block text-sm", children: "Placeholder" }, void 0, false, {
         fileName: "app/components/FieldConfigPanel.tsx",
-        lineNumber: 48,
+        lineNumber: 50,
         columnNumber: 11
       }, this),
-      /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "text", value: field.placeholder, onChange: onChange("placeholder"), className: "mt-1 block w-full border rounded p-1" }, void 0, false, {
+      /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "text", value: field.placeholder || "", onChange: onChange("placeholder"), className: "mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700" }, void 0, false, {
         fileName: "app/components/FieldConfigPanel.tsx",
-        lineNumber: 49,
+        lineNumber: 51,
         columnNumber: 11
       }, this)
     ] }, void 0, true, {
       fileName: "app/components/FieldConfigPanel.tsx",
-      lineNumber: 47,
-      columnNumber: 37
+      lineNumber: 49,
+      columnNumber: 53
     }, this),
     /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { className: "flex items-center", children: [
-      /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { id: "required", type: "checkbox", checked: field.required, onChange: onChange("required") }, void 0, false, {
-        fileName: "app/components/FieldConfigPanel.tsx",
-        lineNumber: 54,
-        columnNumber: 9
-      }, this),
-      /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("label", { htmlFor: "required", className: "ml-2 text-sm", children: "Required" }, void 0, false, {
+      /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "checkbox", id: "required", checked: field.required || false, onChange: onChange("required"), className: "mr-2" }, void 0, false, {
         fileName: "app/components/FieldConfigPanel.tsx",
         lineNumber: 55,
         columnNumber: 9
+      }, this),
+      /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("label", { htmlFor: "required", className: "text-sm", children: "Required" }, void 0, false, {
+        fileName: "app/components/FieldConfigPanel.tsx",
+        lineNumber: 56,
+        columnNumber: 9
       }, this)
     ] }, void 0, true, {
       fileName: "app/components/FieldConfigPanel.tsx",
-      lineNumber: 53,
+      lineNumber: 54,
       columnNumber: 7
     }, this),
     /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { children: [
@@ -4626,7 +4750,7 @@ function FieldConfigPanel() {
         lineNumber: 62,
         columnNumber: 9
       }, this),
-      /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("textarea", { value: field.helpText, onChange: onChange("helpText"), className: "mt-1 block w-full border rounded p-1" }, void 0, false, {
+      /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("textarea", { value: field.helpText || "", onChange: onChange("helpText"), className: "mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700" }, void 0, false, {
         fileName: "app/components/FieldConfigPanel.tsx",
         lineNumber: 63,
         columnNumber: 9
@@ -4641,93 +4765,93 @@ function FieldConfigPanel() {
         /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { children: [
           /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("label", { className: "block text-sm", children: "Min Length" }, void 0, false, {
             fileName: "app/components/FieldConfigPanel.tsx",
-            lineNumber: 70,
+            lineNumber: 69,
             columnNumber: 15
           }, this),
-          /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "number", value: field.minLength || "", onChange: (e) => update(field.id, {
+          /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "number", value: field.minLength || "", onChange: (e) => updateField(field.id, {
             minLength: +e.target.value
-          }), className: "mt-1 block w-full border rounded p-1" }, void 0, false, {
+          }), className: "mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700" }, void 0, false, {
             fileName: "app/components/FieldConfigPanel.tsx",
-            lineNumber: 71,
+            lineNumber: 70,
             columnNumber: 15
           }, this)
         ] }, void 0, true, {
           fileName: "app/components/FieldConfigPanel.tsx",
-          lineNumber: 69,
+          lineNumber: 68,
           columnNumber: 13
         }, this),
         /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { children: [
           /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("label", { className: "block text-sm", children: "Max Length" }, void 0, false, {
             fileName: "app/components/FieldConfigPanel.tsx",
-            lineNumber: 76,
+            lineNumber: 75,
             columnNumber: 15
           }, this),
-          /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "number", value: field.maxLength || "", onChange: (e) => update(field.id, {
+          /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "number", value: field.maxLength || "", onChange: (e) => updateField(field.id, {
             maxLength: +e.target.value
-          }), className: "mt-1 block w-full border rounded p-1" }, void 0, false, {
+          }), className: "mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700" }, void 0, false, {
             fileName: "app/components/FieldConfigPanel.tsx",
-            lineNumber: 77,
+            lineNumber: 76,
             columnNumber: 15
           }, this)
         ] }, void 0, true, {
           fileName: "app/components/FieldConfigPanel.tsx",
-          lineNumber: 75,
+          lineNumber: 74,
           columnNumber: 13
         }, this)
       ] }, void 0, true, {
         fileName: "app/components/FieldConfigPanel.tsx",
-        lineNumber: 68,
+        lineNumber: 67,
         columnNumber: 11
       }, this),
       /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { children: [
         /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("label", { className: "block text-sm", children: "Pattern (regex)" }, void 0, false, {
           fileName: "app/components/FieldConfigPanel.tsx",
-          lineNumber: 83,
+          lineNumber: 82,
           columnNumber: 13
         }, this),
-        /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "text", value: field.pattern || "", onChange: onChange("pattern"), className: "mt-1 block w-full border rounded p-1" }, void 0, false, {
+        /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "text", value: field.pattern || "", onChange: onChange("pattern"), className: "mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700" }, void 0, false, {
           fileName: "app/components/FieldConfigPanel.tsx",
-          lineNumber: 84,
+          lineNumber: 83,
           columnNumber: 13
         }, this)
       ] }, void 0, true, {
         fileName: "app/components/FieldConfigPanel.tsx",
-        lineNumber: 82,
+        lineNumber: 81,
         columnNumber: 11
       }, this)
     ] }, void 0, true, {
       fileName: "app/components/FieldConfigPanel.tsx",
-      lineNumber: 67,
+      lineNumber: 66,
       columnNumber: 53
     }, this),
     ["dropdown", "checkbox"].includes(field.type) && /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("div", { children: [
       /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("label", { className: "block text-sm", children: "Options (comma-separated)" }, void 0, false, {
         fileName: "app/components/FieldConfigPanel.tsx",
-        lineNumber: 90,
+        lineNumber: 88,
         columnNumber: 11
       }, this),
-      /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "text", value: field.options?.map((o) => o.label).join(", ") || "", onChange: (e) => update(field.id, {
+      /* @__PURE__ */ (0, import_jsx_dev_runtime3.jsxDEV)("input", { type: "text", value: field.options?.map((o) => o.label).join(", ") || "", onChange: (e) => updateField(field.id, {
         options: e.target.value.split(",").map((s) => ({
           label: s.trim(),
           value: s.trim().toLowerCase().replace(/\s+/g, "_")
         }))
-      }), className: "mt-1 block w-full border rounded p-1" }, void 0, false, {
+      }), className: "mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700" }, void 0, false, {
         fileName: "app/components/FieldConfigPanel.tsx",
-        lineNumber: 91,
+        lineNumber: 89,
         columnNumber: 11
       }, this)
     ] }, void 0, true, {
       fileName: "app/components/FieldConfigPanel.tsx",
-      lineNumber: 89,
+      lineNumber: 87,
       columnNumber: 57
     }, this)
   ] }, void 0, true, {
     fileName: "app/components/FieldConfigPanel.tsx",
-    lineNumber: 37,
+    lineNumber: 41,
     columnNumber: 10
   }, this);
 }
-_s3(FieldConfigPanel, "FpvJ4GjWnSKujB4zDYJFkOuUiEk=", false, function() {
+_s3(FieldConfigPanel, "4h3nmNDKInAMYNDVa1Ulst+Q49g=", false, function() {
   return [useFormStore, useFormStore, useFormStore];
 });
 _c4 = FieldConfigPanel;
@@ -4736,8 +4860,8 @@ $RefreshReg$(_c4, "FieldConfigPanel");
 window.$RefreshReg$ = prevRefreshReg;
 window.$RefreshSig$ = prevRefreshSig;
 
-// app/components/FormPreview.tsx
-var import_react6 = __toESM(require_react(), 1);
+// app/components/StepTabs.tsx
+var import_react7 = __toESM(require_react(), 1);
 var import_jsx_dev_runtime4 = __toESM(require_jsx_dev_runtime(), 1);
 if (!window.$RefreshReg$ || !window.$RefreshSig$ || !window.$RefreshRuntime$) {
   console.warn("remix:hmr: React Fast Refresh only works when the Remix compiler is running in development mode.");
@@ -4745,7 +4869,7 @@ if (!window.$RefreshReg$ || !window.$RefreshSig$ || !window.$RefreshRuntime$) {
   prevRefreshReg = window.$RefreshReg$;
   prevRefreshSig = window.$RefreshSig$;
   window.$RefreshReg$ = (type, id) => {
-    window.$RefreshRuntime$.register(type, '"app\\\\components\\\\FormPreview.tsx"' + id);
+    window.$RefreshRuntime$.register(type, '"app\\\\components\\\\StepTabs.tsx"' + id);
   };
   window.$RefreshSig$ = window.$RefreshRuntime$.createSignatureFunctionForTransform;
 }
@@ -4755,129 +4879,294 @@ var _s4 = $RefreshSig$();
 if (import.meta) {
   import.meta.hot = createHotContext(
     //@ts-expect-error
-    "app\\components\\FormPreview.tsx"
+    "app\\components\\StepTabs.tsx"
   );
-  import.meta.hot.lastModified = "1748458219761.4055";
+  import.meta.hot.lastModified = "1748704117548.8457";
 }
-function FormPreview() {
+function StepTabs() {
   _s4();
-  const fields = useFormStore((s) => s.fields);
-  const [values, setValues] = (0, import_react6.useState)({});
-  const [errors, setErrors] = (0, import_react6.useState)({});
-  const validate = (f, v) => {
-    if (f.required && !v)
-      return "This field is required.";
-    if (f.minLength && v.length < f.minLength)
-      return `Min length is ${f.minLength}.`;
-    if (f.maxLength && v.length > f.maxLength)
-      return `Max length is ${f.maxLength}.`;
-    if (f.pattern) {
-      const re = new RegExp(f.pattern);
-      if (!re.test(v))
-        return "Invalid format.";
-    }
-    return "";
+  const steps = useFormStore((s) => s.steps);
+  const selectedStep = useFormStore((s) => s.selectedStep);
+  console.log("\u{1F5C4}\uFE0F steptab");
+  const selectStep = useFormStore((s) => s.selectStep);
+  const addStep = useFormStore((s) => s.addStep);
+  const deleteStep = useFormStore((s) => s.deleteStep);
+  const renameStep = useFormStore((s) => s.renameStep);
+  const [editingStepId, setEditingStepId] = (0, import_react7.useState)(null);
+  const [tempTitle, setTempTitle] = (0, import_react7.useState)("");
+  const onEdit = (stepId, currentTitle) => {
+    setEditingStepId(stepId);
+    setTempTitle(currentTitle);
   };
-  const onChange = (id, f) => (e) => {
-    const v = e.target.type === "checkbox" ? e.target.checked : e.target.value;
-    setValues((s) => ({
-      ...s,
-      [id]: v
-    }));
-    const err = validate(f, v);
-    setErrors((s) => ({
-      ...s,
-      [id]: err
-    }));
+  const onSave = (stepId) => {
+    renameStep(stepId, tempTitle || "Untitled Step");
+    setEditingStepId(null);
   };
-  return /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("form", { className: "space-y-4", children: fields.map((f) => /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("div", { className: "flex flex-col", children: [
-    /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("label", { className: "font-medium", children: [
-      f.label,
-      " ",
-      f.required && /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("span", { className: "text-red-500", children: "*" }, void 0, false, {
-        fileName: "app/components/FormPreview.tsx",
-        lineNumber: 54,
-        columnNumber: 38
-      }, this)
-    ] }, void 0, true, {
-      fileName: "app/components/FormPreview.tsx",
-      lineNumber: 53,
-      columnNumber: 11
-    }, this),
-    f.type === "text" && /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("input", { type: "text", placeholder: f.placeholder, value: values[f.id] || "", onChange: onChange(f.id, f), className: "mt-1 border rounded p-2" }, void 0, false, {
-      fileName: "app/components/FormPreview.tsx",
-      lineNumber: 58,
-      columnNumber: 33
-    }, this),
-    f.type === "textarea" && /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("textarea", { placeholder: f.placeholder, value: values[f.id] || "", onChange: onChange(f.id, f), className: "mt-1 border rounded p-2" }, void 0, false, {
-      fileName: "app/components/FormPreview.tsx",
-      lineNumber: 59,
-      columnNumber: 37
-    }, this),
-    f.type === "date" && /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("input", { type: "date", value: values[f.id] || "", onChange: onChange(f.id, f), className: "mt-1 border rounded p-2" }, void 0, false, {
-      fileName: "app/components/FormPreview.tsx",
-      lineNumber: 60,
-      columnNumber: 33
-    }, this),
-    f.type === "dropdown" && /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("select", { value: values[f.id] || "", onChange: onChange(f.id, f), className: "mt-1 border rounded p-2", children: [
-      /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("option", { value: "", children: "Select" }, void 0, false, {
-        fileName: "app/components/FormPreview.tsx",
-        lineNumber: 62,
-        columnNumber: 15
-      }, this),
-      f.options?.map((o) => /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("option", { value: o.value, children: o.label }, o.value, false, {
-        fileName: "app/components/FormPreview.tsx",
-        lineNumber: 63,
-        columnNumber: 36
-      }, this))
-    ] }, void 0, true, {
-      fileName: "app/components/FormPreview.tsx",
-      lineNumber: 61,
-      columnNumber: 37
-    }, this),
-    f.type === "checkbox" && /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("div", { className: "flex items-center", children: [
-      /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("input", { type: "checkbox", checked: values[f.id] || false, onChange: onChange(f.id, f), className: "mr-2" }, void 0, false, {
-        fileName: "app/components/FormPreview.tsx",
-        lineNumber: 68,
-        columnNumber: 15
-      }, this),
-      f.helpText
-    ] }, void 0, true, {
-      fileName: "app/components/FormPreview.tsx",
-      lineNumber: 67,
-      columnNumber: 37
-    }, this),
-    f.helpText && f.type !== "checkbox" && /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("p", { className: "text-sm text-gray-500", children: f.helpText }, void 0, false, {
-      fileName: "app/components/FormPreview.tsx",
-      lineNumber: 72,
-      columnNumber: 51
-    }, this),
-    errors[f.id] && /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("p", { className: "text-sm text-red-500", children: errors[f.id] }, void 0, false, {
-      fileName: "app/components/FormPreview.tsx",
-      lineNumber: 74,
-      columnNumber: 28
+  return /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("div", { className: "flex items-center space-x-2 border-b border-gray-300 dark:border-gray-700 pb-2 mb-4", children: [
+    steps.map((step) => {
+      const isSelected = step.id === selectedStep;
+      return /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("div", { className: "flex items-center space-x-1", children: [
+        editingStepId === step.id ? /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("input", { value: tempTitle, onChange: (e) => setTempTitle(e.target.value), onBlur: () => onSave(step.id), onKeyDown: (e) => {
+          if (e.key === "Enter")
+            onSave(step.id);
+        }, className: "border-b border-gray-400 bg-transparent px-1 focus:outline-none", autoFocus: true }, void 0, false, {
+          fileName: "app/components/StepTabs.tsx",
+          lineNumber: 49,
+          columnNumber: 42
+        }, this) : /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("button", { onClick: () => selectStep(step.id), className: `px-3 py-1 rounded ${isSelected ? "bg-blue-600 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200"}`, children: step.title }, void 0, false, {
+          fileName: "app/components/StepTabs.tsx",
+          lineNumber: 51,
+          columnNumber: 103
+        }, this),
+        isSelected && /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("div", { className: "flex items-center space-x-1", children: [
+          /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("button", { title: "Rename", onClick: () => onEdit(step.id, step.title), className: "text-gray-500 hover:text-gray-800 dark:hover:text-gray-300", children: "\u270F\uFE0F" }, void 0, false, {
+            fileName: "app/components/StepTabs.tsx",
+            lineNumber: 55,
+            columnNumber: 17
+          }, this),
+          steps.length > 1 && /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("button", { title: "Delete Step", onClick: () => deleteStep(step.id), className: "text-red-500 hover:text-red-800", children: "\u{1F5D1}\uFE0F" }, void 0, false, {
+            fileName: "app/components/StepTabs.tsx",
+            lineNumber: 58,
+            columnNumber: 38
+          }, this)
+        ] }, void 0, true, {
+          fileName: "app/components/StepTabs.tsx",
+          lineNumber: 54,
+          columnNumber: 28
+        }, this)
+      ] }, step.id, true, {
+        fileName: "app/components/StepTabs.tsx",
+        lineNumber: 48,
+        columnNumber: 14
+      }, this);
+    }),
+    /* @__PURE__ */ (0, import_jsx_dev_runtime4.jsxDEV)("button", { onClick: () => addStep(`Step ${steps.length + 1}`), className: "ml-4 px-2 py-1 bg-green-600 text-white rounded", children: "+ Step" }, void 0, false, {
+      fileName: "app/components/StepTabs.tsx",
+      lineNumber: 65,
+      columnNumber: 7
     }, this)
-  ] }, f.id, true, {
-    fileName: "app/components/FormPreview.tsx",
-    lineNumber: 52,
-    columnNumber: 24
-  }, this)) }, void 0, false, {
-    fileName: "app/components/FormPreview.tsx",
-    lineNumber: 51,
+  ] }, void 0, true, {
+    fileName: "app/components/StepTabs.tsx",
+    lineNumber: 45,
     columnNumber: 10
   }, this);
 }
-_s4(FormPreview, "TJDMT41+A8n12W/Y9R2RmKYtrpk=", false, function() {
-  return [useFormStore];
+_s4(StepTabs, "ThcN8aONGIr6yyRE5z9Gpw5q3Ng=", false, function() {
+  return [useFormStore, useFormStore, useFormStore, useFormStore, useFormStore, useFormStore];
 });
-_c5 = FormPreview;
+_c5 = StepTabs;
 var _c5;
-$RefreshReg$(_c5, "FormPreview");
+$RefreshReg$(_c5, "StepTabs");
+window.$RefreshReg$ = prevRefreshReg;
+window.$RefreshSig$ = prevRefreshSig;
+
+// app/components/MultiStepPreview.tsx
+var import_react8 = __toESM(require_react(), 1);
+var import_jsx_dev_runtime5 = __toESM(require_jsx_dev_runtime(), 1);
+if (!window.$RefreshReg$ || !window.$RefreshSig$ || !window.$RefreshRuntime$) {
+  console.warn("remix:hmr: React Fast Refresh only works when the Remix compiler is running in development mode.");
+} else {
+  prevRefreshReg = window.$RefreshReg$;
+  prevRefreshSig = window.$RefreshSig$;
+  window.$RefreshReg$ = (type, id) => {
+    window.$RefreshRuntime$.register(type, '"app\\\\components\\\\MultiStepPreview.tsx"' + id);
+  };
+  window.$RefreshSig$ = window.$RefreshRuntime$.createSignatureFunctionForTransform;
+}
+var prevRefreshReg;
+var prevRefreshSig;
+var _s5 = $RefreshSig$();
+if (import.meta) {
+  import.meta.hot = createHotContext(
+    //@ts-expect-error
+    "app\\components\\MultiStepPreview.tsx"
+  );
+  import.meta.hot.lastModified = "1748707490067.861";
+}
+function MultiStepPreview() {
+  _s5();
+  const steps = useFormStore((s) => s.steps);
+  const fields = useFormStore((s) => s.fields);
+  console.log("\u{1F504} [MultiStepPreview] render");
+  const [currentStepIdx, setCurrentStepIdx] = (0, import_react8.useState)(0);
+  const step = steps[currentStepIdx];
+  const stepFields = fields.filter((f) => f.stepId === step.id);
+  const [values, setValues] = (0, import_react8.useState)({});
+  const [errors, setErrors] = (0, import_react8.useState)({});
+  function validateField(f, v) {
+    if (f.required && !v)
+      return "Required";
+    if (f.minLength && v.length < f.minLength)
+      return `Min length: ${f.minLength}`;
+    if (f.maxLength && v.length > f.maxLength)
+      return `Max length: ${f.maxLength}`;
+    if (f.pattern) {
+      const re = new RegExp(f.pattern);
+      if (!re.test(v))
+        return "Invalid format";
+    }
+    return "";
+  }
+  const onChange = (f) => (e) => {
+    const v = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    setValues((prev) => ({
+      ...prev,
+      [f.id]: v
+    }));
+    const err = validateField(f, v);
+    setErrors((prev) => ({
+      ...prev,
+      [f.id]: err
+    }));
+  };
+  const goNext = () => {
+    const newErrors = {};
+    let hasError = false;
+    stepFields.forEach((f) => {
+      const v = values[f.id];
+      const err = validateField(f, v);
+      if (err) {
+        newErrors[f.id] = err;
+        hasError = true;
+      }
+    });
+    setErrors((prev) => ({
+      ...prev,
+      ...newErrors
+    }));
+    if (hasError)
+      return;
+    if (currentStepIdx < steps.length - 1) {
+      setCurrentStepIdx(currentStepIdx + 1);
+    } else {
+      alert("All steps validated! You can now submit.");
+    }
+  };
+  const goPrev = () => {
+    if (currentStepIdx > 0) {
+      setCurrentStepIdx(currentStepIdx - 1);
+    }
+  };
+  return /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("div", { className: "space-y-4 w-full max-w-lg mx-auto p-4 bg-gray-50 dark:bg-gray-800 rounded shadow", children: [
+    /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("div", { className: "text-sm text-gray-600 dark:text-gray-400", children: [
+      "Step ",
+      currentStepIdx + 1,
+      " of ",
+      steps.length,
+      ": ",
+      step.title
+    ] }, void 0, true, {
+      fileName: "app/components/MultiStepPreview.tsx",
+      lineNumber: 84,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("div", { className: "space-y-4", children: stepFields.map((f) => /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("div", { className: "flex flex-col", children: [
+      /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("label", { className: "font-medium text-gray-700 dark:text-gray-200", children: [
+        f.label,
+        f.required && /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("span", { className: "text-red-500 ml-1", children: "*" }, void 0, false, {
+          fileName: "app/components/MultiStepPreview.tsx",
+          lineNumber: 92,
+          columnNumber: 30
+        }, this)
+      ] }, void 0, true, {
+        fileName: "app/components/MultiStepPreview.tsx",
+        lineNumber: 90,
+        columnNumber: 13
+      }, this),
+      f.type === "text" && /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("input", { type: "text", placeholder: f.placeholder, value: values[f.id] || "", onChange: onChange(f), className: "mt-1 border rounded p-2 bg-white dark:bg-gray-700" }, void 0, false, {
+        fileName: "app/components/MultiStepPreview.tsx",
+        lineNumber: 95,
+        columnNumber: 35
+      }, this),
+      f.type === "textarea" && /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("textarea", { placeholder: f.placeholder, value: values[f.id] || "", onChange: onChange(f), className: "mt-1 border rounded p-2 bg-white dark:bg-gray-700" }, void 0, false, {
+        fileName: "app/components/MultiStepPreview.tsx",
+        lineNumber: 96,
+        columnNumber: 39
+      }, this),
+      f.type === "date" && /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("input", { type: "date", value: values[f.id] || "", onChange: onChange(f), className: "mt-1 border rounded p-2 bg-white dark:bg-gray-700" }, void 0, false, {
+        fileName: "app/components/MultiStepPreview.tsx",
+        lineNumber: 97,
+        columnNumber: 35
+      }, this),
+      f.type === "dropdown" && /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("select", { value: values[f.id] || "", onChange: onChange(f), className: "mt-1 border rounded p-2 bg-white dark:bg-gray-700", children: [
+        /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("option", { value: "", children: "Select\u2026" }, void 0, false, {
+          fileName: "app/components/MultiStepPreview.tsx",
+          lineNumber: 99,
+          columnNumber: 17
+        }, this),
+        f.options?.map((o) => /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("option", { value: o.value, children: o.label }, o.value, false, {
+          fileName: "app/components/MultiStepPreview.tsx",
+          lineNumber: 100,
+          columnNumber: 38
+        }, this))
+      ] }, void 0, true, {
+        fileName: "app/components/MultiStepPreview.tsx",
+        lineNumber: 98,
+        columnNumber: 39
+      }, this),
+      f.type === "checkbox" && /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("div", { className: "flex items-center", children: [
+        /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("input", { type: "checkbox", checked: values[f.id] || false, onChange: onChange(f), className: "mr-2" }, void 0, false, {
+          fileName: "app/components/MultiStepPreview.tsx",
+          lineNumber: 105,
+          columnNumber: 17
+        }, this),
+        /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("span", { className: "text-gray-700 dark:text-gray-200", children: f.helpText }, void 0, false, {
+          fileName: "app/components/MultiStepPreview.tsx",
+          lineNumber: 106,
+          columnNumber: 17
+        }, this)
+      ] }, void 0, true, {
+        fileName: "app/components/MultiStepPreview.tsx",
+        lineNumber: 104,
+        columnNumber: 39
+      }, this),
+      errors[f.id] && /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("p", { className: "text-sm text-red-600 mt-1", children: errors[f.id] }, void 0, false, {
+        fileName: "app/components/MultiStepPreview.tsx",
+        lineNumber: 111,
+        columnNumber: 30
+      }, this)
+    ] }, f.id, true, {
+      fileName: "app/components/MultiStepPreview.tsx",
+      lineNumber: 89,
+      columnNumber: 30
+    }, this)) }, void 0, false, {
+      fileName: "app/components/MultiStepPreview.tsx",
+      lineNumber: 88,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("div", { className: "flex justify-between mt-6", children: [
+      /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("button", { onClick: goPrev, disabled: currentStepIdx === 0, className: `px-4 py-2 rounded ${currentStepIdx === 0 ? "bg-gray-300 text-gray-600 cursor-not-allowed" : "bg-gray-600 text-white hover:bg-gray-700"}`, children: "\u2190 Previous" }, void 0, false, {
+        fileName: "app/components/MultiStepPreview.tsx",
+        lineNumber: 116,
+        columnNumber: 9
+      }, this),
+      /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("button", { onClick: goNext, className: "px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700", children: currentStepIdx === steps.length - 1 ? "Submit" : "Next \u2192" }, void 0, false, {
+        fileName: "app/components/MultiStepPreview.tsx",
+        lineNumber: 119,
+        columnNumber: 9
+      }, this)
+    ] }, void 0, true, {
+      fileName: "app/components/MultiStepPreview.tsx",
+      lineNumber: 115,
+      columnNumber: 7
+    }, this)
+  ] }, void 0, true, {
+    fileName: "app/components/MultiStepPreview.tsx",
+    lineNumber: 83,
+    columnNumber: 10
+  }, this);
+}
+_s5(MultiStepPreview, "2zZtrRStjUiX+jqMhUVIsPAB1jE=", false, function() {
+  return [useFormStore, useFormStore];
+});
+_c6 = MultiStepPreview;
+var _c6;
+$RefreshReg$(_c6, "MultiStepPreview");
 window.$RefreshReg$ = prevRefreshReg;
 window.$RefreshSig$ = prevRefreshSig;
 
 // app/components/TemplateLoader.tsx
-var import_react7 = __toESM(require_react(), 1);
+var import_react9 = __toESM(require_react(), 1);
 
 // app/utils/templates.ts
 if (import.meta) {
@@ -4885,36 +5174,44 @@ if (import.meta) {
     //@ts-expect-error
     "app\\utils\\templates.ts"
   );
-  import.meta.hot.lastModified = "1748462544053.8384";
+  import.meta.hot.lastModified = "1748702835898.297";
 }
 var CONTACT_US = {
   title: "Contact Us",
   fields: [
     {
-      // id here will be replaced by store
-      id: "tx",
+      // no `id` or `stepId` here—store will assign them
       type: "text",
       label: "Name",
-      placeholder: "Your full name",
+      placeholder: "Your name",
       required: true,
-      helpText: ""
+      helpText: "",
+      minLength: void 0,
+      maxLength: void 0,
+      pattern: "",
+      options: void 0
     },
     {
-      id: "em",
       type: "text",
       label: "Email",
       placeholder: "you@example.com",
       required: true,
       helpText: "",
-      pattern: "\\S+@\\S+\\.\\S+"
+      minLength: void 0,
+      maxLength: void 0,
+      pattern: "\\S+@\\S+\\.\\S+",
+      options: void 0
     },
     {
-      id: "msg",
       type: "textarea",
       label: "Message",
       placeholder: "How can we help?",
       required: true,
-      helpText: ""
+      helpText: "",
+      minLength: void 0,
+      maxLength: void 0,
+      pattern: "",
+      options: void 0
     }
   ]
 };
@@ -4922,28 +5219,35 @@ var FEEDBACK = {
   title: "Feedback",
   fields: [
     {
-      id: "rt",
       type: "dropdown",
       label: "Rating",
+      placeholder: void 0,
+      required: true,
+      helpText: "",
       options: [
         { label: "\u{1F44D} Good", value: "good" },
         { label: "\u{1F44E} Bad", value: "bad" }
       ],
-      required: true
+      minLength: void 0,
+      maxLength: void 0,
+      pattern: ""
     },
     {
-      id: "cm",
       type: "textarea",
       label: "Comments",
-      placeholder: "Leave your comments\u2026",
+      placeholder: "Your comments\u2026",
       required: false,
-      helpText: "Optional"
+      helpText: "Optional",
+      options: void 0,
+      minLength: void 0,
+      maxLength: void 0,
+      pattern: ""
     }
   ]
 };
 
 // app/components/TemplateLoader.tsx
-var import_jsx_dev_runtime5 = __toESM(require_jsx_dev_runtime(), 1);
+var import_jsx_dev_runtime6 = __toESM(require_jsx_dev_runtime(), 1);
 if (!window.$RefreshReg$ || !window.$RefreshSig$ || !window.$RefreshRuntime$) {
   console.warn("remix:hmr: React Fast Refresh only works when the Remix compiler is running in development mode.");
 } else {
@@ -4956,13 +5260,13 @@ if (!window.$RefreshReg$ || !window.$RefreshSig$ || !window.$RefreshRuntime$) {
 }
 var prevRefreshReg;
 var prevRefreshSig;
-var _s5 = $RefreshSig$();
+var _s6 = $RefreshSig$();
 if (import.meta) {
   import.meta.hot = createHotContext(
     //@ts-expect-error
     "app\\components\\TemplateLoader.tsx"
   );
-  import.meta.hot.lastModified = "1748462615012.9102";
+  import.meta.hot.lastModified = "1748703066872.9978";
 }
 var TEMPLATES = [{
   name: "Contact Us",
@@ -4972,121 +5276,125 @@ var TEMPLATES = [{
   data: FEEDBACK
 }];
 function TemplateLoader() {
-  _s5();
+  _s6();
   const loadTemplate = useFormStore((s) => s.loadTemplate);
-  const [choice, setChoice] = (0, import_react7.useState)(TEMPLATES[0].name);
+  const [choice, setChoice] = (0, import_react9.useState)(TEMPLATES[0].name);
   const apply = () => {
     const tpl = TEMPLATES.find((t) => t.name === choice);
-    if (tpl)
+    if (tpl) {
       loadTemplate(tpl.data);
+    }
   };
-  return /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("div", { className: "mb-6 space-y-2", children: [
-    /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("h3", { className: "font-semibold", children: "Load Template" }, void 0, false, {
+  return /* @__PURE__ */ (0, import_jsx_dev_runtime6.jsxDEV)("div", { className: "mb-6 space-y-2", children: [
+    /* @__PURE__ */ (0, import_jsx_dev_runtime6.jsxDEV)("h3", { className: "font-semibold", children: "Load Template" }, void 0, false, {
       fileName: "app/components/TemplateLoader.tsx",
-      lineNumber: 41,
+      lineNumber: 45,
       columnNumber: 7
     }, this),
-    /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("select", { value: choice, onChange: (e) => setChoice(e.target.value), className: "w-full border rounded p-1", children: TEMPLATES.map((t) => /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("option", { value: t.name, children: t.name }, t.name, false, {
+    /* @__PURE__ */ (0, import_jsx_dev_runtime6.jsxDEV)("select", { value: choice, onChange: (e) => setChoice(e.target.value), className: "w-full border rounded p-1 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200", children: TEMPLATES.map((t) => /* @__PURE__ */ (0, import_jsx_dev_runtime6.jsxDEV)("option", { value: t.name, children: t.name }, t.name, false, {
       fileName: "app/components/TemplateLoader.tsx",
-      lineNumber: 43,
+      lineNumber: 47,
       columnNumber: 29
     }, this)) }, void 0, false, {
       fileName: "app/components/TemplateLoader.tsx",
-      lineNumber: 42,
+      lineNumber: 46,
       columnNumber: 7
     }, this),
-    /* @__PURE__ */ (0, import_jsx_dev_runtime5.jsxDEV)("button", { onClick: apply, className: "w-full bg-purple-600 text-white rounded px-2 py-1", children: "Load" }, void 0, false, {
+    /* @__PURE__ */ (0, import_jsx_dev_runtime6.jsxDEV)("button", { onClick: apply, className: "w-full bg-purple-600 text-white rounded px-2 py-1", children: "Load" }, void 0, false, {
       fileName: "app/components/TemplateLoader.tsx",
-      lineNumber: 47,
+      lineNumber: 51,
       columnNumber: 7
     }, this)
   ] }, void 0, true, {
     fileName: "app/components/TemplateLoader.tsx",
-    lineNumber: 40,
+    lineNumber: 44,
     columnNumber: 10
   }, this);
 }
-_s5(TemplateLoader, "zDVeMTDmOL5nTCaFTF1gloKTIbw=", false, function() {
+_s6(TemplateLoader, "zDVeMTDmOL5nTCaFTF1gloKTIbw=", false, function() {
   return [useFormStore];
 });
-_c6 = TemplateLoader;
-var _c6;
-$RefreshReg$(_c6, "TemplateLoader");
+_c7 = TemplateLoader;
+var _c7;
+$RefreshReg$(_c7, "TemplateLoader");
 window.$RefreshReg$ = prevRefreshReg;
 window.$RefreshSig$ = prevRefreshSig;
 
-// app/components/FormCreatorControl.tsx
-var import_react8 = __toESM(require_react(), 1);
-var import_jsx_dev_runtime6 = __toESM(require_jsx_dev_runtime(), 1);
+// app/components/SaveLoadControls.tsx
+var import_react10 = __toESM(require_react(), 1);
+var import_jsx_dev_runtime7 = __toESM(require_jsx_dev_runtime(), 1);
 if (!window.$RefreshReg$ || !window.$RefreshSig$ || !window.$RefreshRuntime$) {
   console.warn("remix:hmr: React Fast Refresh only works when the Remix compiler is running in development mode.");
 } else {
   prevRefreshReg = window.$RefreshReg$;
   prevRefreshSig = window.$RefreshSig$;
   window.$RefreshReg$ = (type, id) => {
-    window.$RefreshRuntime$.register(type, '"app\\\\components\\\\FormCreatorControl.tsx"' + id);
+    window.$RefreshRuntime$.register(type, '"app\\\\components\\\\SaveLoadControls.tsx"' + id);
   };
   window.$RefreshSig$ = window.$RefreshRuntime$.createSignatureFunctionForTransform;
 }
 var prevRefreshReg;
 var prevRefreshSig;
-var _s6 = $RefreshSig$();
+var _s7 = $RefreshSig$();
 if (import.meta) {
   import.meta.hot = createHotContext(
     //@ts-expect-error
-    "app\\components\\FormCreatorControl.tsx"
+    "app\\components\\SaveLoadControls.tsx"
   );
-  import.meta.hot.lastModified = "1748543869820.107";
+  import.meta.hot.lastModified = "1748707502290.8657";
 }
-function FormCreatorControls() {
-  _s6();
-  const createForm = useFormStore((s) => s.createForm);
-  const formId = useFormStore((s) => s.formId);
-  const [link, setLink] = (0, import_react8.useState)("");
-  const onCreate = () => {
-    const id = createForm();
-    const url = `${window.location.origin}/forms/${id}`;
-    setLink(url);
+function SaveLoadControls() {
+  _s7();
+  const saveToLocal = useFormStore((s) => s.saveToLocal);
+  const loadFromLocal = useFormStore((s) => s.loadFromLocal);
+  const [key2, setKey] = (0, import_react10.useState)("");
+  const onSave = () => {
+    if (!key2.trim()) {
+      alert("Please enter a non-empty key to save.");
+      return;
+    }
+    saveToLocal(key2.trim());
   };
-  return /* @__PURE__ */ (0, import_jsx_dev_runtime6.jsxDEV)("div", { className: "space-y-2 mb-6", children: [
-    /* @__PURE__ */ (0, import_jsx_dev_runtime6.jsxDEV)("button", { onClick: onCreate, className: "w-full bg-blue-600 text-white py-2 rounded", children: "Generate Shareable Link" }, void 0, false, {
-      fileName: "app/components/FormCreatorControl.tsx",
-      lineNumber: 35,
+  const onLoad = () => {
+    if (!key2.trim()) {
+      alert("Please enter a key to load.");
+      return;
+    }
+    loadFromLocal(key2.trim());
+  };
+  return /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("div", { className: "flex space-x-2 items-center", children: [
+    /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("input", { type: "text", placeholder: "form key", value: key2, onChange: (e) => setKey(e.target.value), className: "border rounded px-2 py-1 text-sm w-32 bg-gray-50 dark:bg-gray-700" }, void 0, false, {
+      fileName: "app/components/SaveLoadControls.tsx",
+      lineNumber: 46,
       columnNumber: 7
     }, this),
-    link && /* @__PURE__ */ (0, import_jsx_dev_runtime6.jsxDEV)("div", { className: "mt-2 text-sm break-all", children: [
-      /* @__PURE__ */ (0, import_jsx_dev_runtime6.jsxDEV)("span", { className: "block font-semibold", children: "Link:" }, void 0, false, {
-        fileName: "app/components/FormCreatorControl.tsx",
-        lineNumber: 39,
-        columnNumber: 11
-      }, this),
-      /* @__PURE__ */ (0, import_jsx_dev_runtime6.jsxDEV)("a", { href: link, className: "text-blue-700", children: link }, void 0, false, {
-        fileName: "app/components/FormCreatorControl.tsx",
-        lineNumber: 40,
-        columnNumber: 11
-      }, this)
-    ] }, void 0, true, {
-      fileName: "app/components/FormCreatorControl.tsx",
-      lineNumber: 38,
-      columnNumber: 16
+    /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("button", { onClick: onSave, className: "bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700", children: "Save" }, void 0, false, {
+      fileName: "app/components/SaveLoadControls.tsx",
+      lineNumber: 47,
+      columnNumber: 7
+    }, this),
+    /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("button", { onClick: onLoad, className: "bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700", children: "Load" }, void 0, false, {
+      fileName: "app/components/SaveLoadControls.tsx",
+      lineNumber: 50,
+      columnNumber: 7
     }, this)
   ] }, void 0, true, {
-    fileName: "app/components/FormCreatorControl.tsx",
-    lineNumber: 34,
+    fileName: "app/components/SaveLoadControls.tsx",
+    lineNumber: 45,
     columnNumber: 10
   }, this);
 }
-_s6(FormCreatorControls, "sG075ZUdapvrmgkPSZGgTG+UhyY=", false, function() {
+_s7(SaveLoadControls, "VRsC0xB1Yg19nuueL4wOje1QHlA=", false, function() {
   return [useFormStore, useFormStore];
 });
-_c7 = FormCreatorControls;
-var _c7;
-$RefreshReg$(_c7, "FormCreatorControls");
+_c8 = SaveLoadControls;
+var _c8;
+$RefreshReg$(_c8, "SaveLoadControls");
 window.$RefreshReg$ = prevRefreshReg;
 window.$RefreshSig$ = prevRefreshSig;
 
 // app/routes/_index.tsx
-var import_jsx_dev_runtime7 = __toESM(require_jsx_dev_runtime(), 1);
+var import_jsx_dev_runtime8 = __toESM(require_jsx_dev_runtime(), 1);
 if (!window.$RefreshReg$ || !window.$RefreshSig$ || !window.$RefreshRuntime$) {
   console.warn("remix:hmr: React Fast Refresh only works when the Remix compiler is running in development mode.");
 } else {
@@ -5099,47 +5407,45 @@ if (!window.$RefreshReg$ || !window.$RefreshSig$ || !window.$RefreshRuntime$) {
 }
 var prevRefreshReg;
 var prevRefreshSig;
-var _s7 = $RefreshSig$();
+var _s8 = $RefreshSig$();
 if (import.meta) {
   import.meta.hot = createHotContext(
     //@ts-expect-error
     "app\\routes\\_index.tsx"
   );
-  import.meta.hot.lastModified = "1748544322442.08";
+  import.meta.hot.lastModified = "1748707146136.577";
 }
 function Index() {
-  _s7();
-  const {
-    theme,
-    toggle
-  } = useThemeStore();
-  const {
-    fields,
-    addField,
-    moveField
-  } = useFormStore();
-  const [overlayContent, setOverlayContent] = (0, import_react9.useState)(null);
-  const [mode, setMode] = (0, import_react9.useState)("desktop");
+  _s8();
+  const theme = useThemeStore((s) => s.theme);
+  const toggle = useThemeStore((s) => s.toggle);
+  console.log("\u{1F504} [Index] render");
+  const fields = useFormStore((s) => s.fields);
+  const addField = useFormStore((s) => s.addField);
+  const moveFieldWithinStep = useFormStore((s) => s.moveFieldWithinStep);
+  const [mode, setMode] = (0, import_react11.useState)("desktop");
   const widths = {
     desktop: "w-[768px]",
     tablet: "w-[512px]",
     mobile: "w-[320px]"
   };
+  const [overlayContent, setOverlayContent] = (0, import_react11.useState)(null);
   const sensors = useSensors(useSensor(PointerSensor, {
     activationConstraint: {
       distance: 5
     }
   }), useSensor(MouseSensor));
-  const handleDragStart = (e) => {
+  function handleDragStart(e) {
     const type = e.active.data.current?.type;
-    if (type)
-      setOverlayContent(/* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("div", { className: "p-2 rounded bg-blue-200", children: type }, void 0, false, {
+    if (type) {
+      setOverlayContent(/* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("div", { className: "p-2 bg-blue-200 rounded", children: type }, void 0, false, {
         fileName: "app/routes/_index.tsx",
-        lineNumber: 64,
-        columnNumber: 33
+        lineNumber: 206,
+        columnNumber: 25
       }, this));
-  };
-  const handleDragEnd = (e) => {
+    }
+  }
+  function handleDragEnd(e) {
     const {
       active,
       over
@@ -5152,157 +5458,151 @@ function Index() {
     if (over && active.id !== over.id) {
       const oldIndex = fields.findIndex((f) => f.id === active.id);
       const newIndex = fields.findIndex((f) => f.id === over.id);
-      if (oldIndex > -1 && newIndex > -1)
-        moveField(oldIndex, newIndex);
+      if (oldIndex > -1 && newIndex > -1) {
+        moveFieldWithinStep(oldIndex, newIndex);
+      }
     }
-  };
-  return /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("div", { className: "h-screen flex flex-col", children: [
-    /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("header", { className: "flex items-center justify-between p-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700", children: [
-      /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("div", { className: "flex-1", children: /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("h1", { className: "text-xl font-bold", children: "Form Builder" }, void 0, false, {
+  }
+  return /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("div", { className: "h-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100", children: [
+    /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("header", { className: "flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700", children: [
+      /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("div", { className: "flex-1", children: /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("h1", { className: "text-xl font-bold", children: "Multi-Step Form Builder" }, void 0, false, {
         fileName: "app/routes/_index.tsx",
-        lineNumber: 88,
+        lineNumber: 235,
         columnNumber: 11
       }, this) }, void 0, false, {
         fileName: "app/routes/_index.tsx",
-        lineNumber: 87,
+        lineNumber: 234,
         columnNumber: 9
       }, this),
-      /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("div", { className: "flex-1 flex justify-center items-center", children: /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)(FormCreatorControls, {}, void 0, false, {
+      /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("div", { className: "flex-1 flex justify-center", children: /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)(SaveLoadControls, {}, void 0, false, {
         fileName: "app/routes/_index.tsx",
-        lineNumber: 91,
+        lineNumber: 238,
         columnNumber: 11
       }, this) }, void 0, false, {
         fileName: "app/routes/_index.tsx",
-        lineNumber: 90,
+        lineNumber: 237,
         columnNumber: 9
       }, this),
-      /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("div", { className: "flex-1 flex justify-end", children: [
-        /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)(Link, { to: "/dashboard", className: "text-white-600", children: "Dashboard" }, void 0, false, {
-          fileName: "app/routes/_index.tsx",
-          lineNumber: 94,
-          columnNumber: 11
-        }, this),
-        /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("button", { onClick: toggle, className: "px-3 py-1 rounded bg-gray-200 dark:bg-gray-700", children: [
-          theme === "light" ? "Dark" : "Light",
-          " Mode"
-        ] }, void 0, true, {
-          fileName: "app/routes/_index.tsx",
-          lineNumber: 97,
-          columnNumber: 11
-        }, this)
+      /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("div", { className: "flex-1 flex justify-end", children: /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("button", { onClick: toggle, className: "px-3 py-1 rounded bg-gray-200 dark:bg-gray-700", children: [
+        theme === "light" ? "Dark" : "Light",
+        " Mode"
       ] }, void 0, true, {
         fileName: "app/routes/_index.tsx",
-        lineNumber: 93,
+        lineNumber: 241,
+        columnNumber: 11
+      }, this) }, void 0, false, {
+        fileName: "app/routes/_index.tsx",
+        lineNumber: 240,
         columnNumber: 9
       }, this)
     ] }, void 0, true, {
       fileName: "app/routes/_index.tsx",
-      lineNumber: 86,
+      lineNumber: 233,
       columnNumber: 7
     }, this),
-    /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)(DndContext, { sensors, collisionDetection: closestCenter, onDragStart: handleDragStart, onDragEnd: handleDragEnd, children: [
-      /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("main", { className: "grid grid-cols-1 grid-rows-[auto_auto_auto] md:grid-cols-[280px_1fr_2fr] md:grid-rows-none gap-4 flex-1 p-4 overflow-hidden", children: [
-        /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("aside", { className: "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-4 overflow-auto", children: [
-          /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)(FieldPalette, {}, void 0, false, {
+    /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)(DndContext, { sensors, collisionDetection: closestCenter, onDragStart: handleDragStart, onDragEnd: handleDragEnd, children: [
+      /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("main", { className: "grid grid-cols-1 grid-rows-[auto_auto_auto] md:grid-cols-[280px_1fr_1.5fr] md:grid-rows-none gap-4 flex-1 p-4 overflow-hidden", children: [
+        /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("aside", { className: "bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-4 overflow-auto space-y-4", children: [
+          /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)(TemplateLoader, {}, void 0, false, {
             fileName: "app/routes/_index.tsx",
-            lineNumber: 109,
+            lineNumber: 252,
             columnNumber: 13
           }, this),
-          /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)(TemplateLoader, {}, void 0, false, {
+          /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)(FieldPalette, {}, void 0, false, {
             fileName: "app/routes/_index.tsx",
-            lineNumber: 110,
+            lineNumber: 253,
             columnNumber: 13
           }, this),
-          /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("div", { className: "mt-6", children: /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)(FieldConfigPanel, {}, void 0, false, {
+          /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)(FieldConfigPanel, {}, void 0, false, {
             fileName: "app/routes/_index.tsx",
-            lineNumber: 113,
-            columnNumber: 15
-          }, this) }, void 0, false, {
-            fileName: "app/routes/_index.tsx",
-            lineNumber: 112,
+            lineNumber: 254,
             columnNumber: 13
           }, this)
         ] }, void 0, true, {
           fileName: "app/routes/_index.tsx",
-          lineNumber: 108,
+          lineNumber: 251,
           columnNumber: 11
         }, this),
-        /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("section", { className: "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-4 overflow-auto", children: [
-          /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("h2", { className: "text-lg font-semibold mb-4", children: "Builder Canvas" }, void 0, false, {
+        /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("section", { className: "bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-4 overflow-auto flex flex-col", children: [
+          /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)(StepTabs, {}, void 0, false, {
             fileName: "app/routes/_index.tsx",
-            lineNumber: 119,
+            lineNumber: 259,
             columnNumber: 13
           }, this),
-          /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)(SortableContext, { items: fields.map((f) => f.id), strategy: verticalListSortingStrategy, children: /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)(FieldCanvas, {}, void 0, false, {
+          /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("div", { className: "flex-1 overflow-auto p-2 bg-gray-50 dark:bg-gray-900 rounded shadow", children: /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)(SortableContext, { items: fields.map((f) => f.id), strategy: verticalListSortingStrategy, children: /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)(FieldCanvas, {}, void 0, false, {
             fileName: "app/routes/_index.tsx",
-            lineNumber: 121,
+            lineNumber: 262,
+            columnNumber: 17
+          }, this) }, void 0, false, {
+            fileName: "app/routes/_index.tsx",
+            lineNumber: 261,
             columnNumber: 15
           }, this) }, void 0, false, {
             fileName: "app/routes/_index.tsx",
-            lineNumber: 120,
+            lineNumber: 260,
             columnNumber: 13
           }, this)
         ] }, void 0, true, {
           fileName: "app/routes/_index.tsx",
-          lineNumber: 118,
+          lineNumber: 258,
           columnNumber: 11
         }, this),
-        /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("section", { className: "bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-4 overflow-auto flex flex-col items-center", children: [
-          /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("div", { className: "mb-4 space-x-2", children: ["desktop", "tablet", "mobile"].map((m) => /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("button", { onClick: () => setMode(m), className: `px-2 py-1 border rounded ${mode === m ? "bg-blue-500 text-white" : "bg-gray-200 dark:bg-gray-700"}`, children: m.charAt(0).toUpperCase() + m.slice(1) }, m, false, {
+        /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("section", { className: "bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 p-4 overflow-auto flex flex-col items-center", children: [
+          /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("div", { className: "mb-4 space-x-2", children: ["desktop", "tablet", "mobile"].map((m) => /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("button", { onClick: () => setMode(m), className: `px-2 py-1 border rounded ${mode === m ? "bg-blue-500 text-white" : "bg-gray-200 dark:bg-gray-700"}`, children: m.charAt(0).toUpperCase() + m.slice(1) }, m, false, {
             fileName: "app/routes/_index.tsx",
-            lineNumber: 128,
+            lineNumber: 271,
             columnNumber: 57
           }, this)) }, void 0, false, {
             fileName: "app/routes/_index.tsx",
-            lineNumber: 127,
+            lineNumber: 270,
             columnNumber: 13
           }, this),
-          /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)("div", { className: `border p-4 ${widths[mode]} mx-auto`, children: /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)(FormPreview, {}, void 0, false, {
+          /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)("div", { className: `border p-4 ${widths[mode]} mx-auto`, children: /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)(MultiStepPreview, {}, void 0, false, {
             fileName: "app/routes/_index.tsx",
-            lineNumber: 133,
+            lineNumber: 278,
             columnNumber: 15
           }, this) }, void 0, false, {
             fileName: "app/routes/_index.tsx",
-            lineNumber: 132,
+            lineNumber: 277,
             columnNumber: 13
           }, this)
         ] }, void 0, true, {
           fileName: "app/routes/_index.tsx",
-          lineNumber: 126,
+          lineNumber: 268,
           columnNumber: 11
         }, this)
       ] }, void 0, true, {
         fileName: "app/routes/_index.tsx",
-        lineNumber: 106,
+        lineNumber: 249,
         columnNumber: 9
       }, this),
-      /* @__PURE__ */ (0, import_jsx_dev_runtime7.jsxDEV)(DragOverlay, { dropAnimation: {
+      /* @__PURE__ */ (0, import_jsx_dev_runtime8.jsxDEV)(DragOverlay, { dropAnimation: {
         duration: 150
       }, children: overlayContent }, void 0, false, {
         fileName: "app/routes/_index.tsx",
-        lineNumber: 139,
+        lineNumber: 283,
         columnNumber: 9
       }, this)
     ] }, void 0, true, {
       fileName: "app/routes/_index.tsx",
-      lineNumber: 104,
+      lineNumber: 248,
       columnNumber: 7
     }, this)
   ] }, void 0, true, {
     fileName: "app/routes/_index.tsx",
-    lineNumber: 84,
+    lineNumber: 231,
     columnNumber: 10
   }, this);
 }
-_s7(Index, "7FqA3tTYOwGmfucTg+RuWMs9C1Q=", false, function() {
-  return [useThemeStore, useFormStore, useSensors, useSensor, useSensor];
+_s8(Index, "EjfUIOS7DRBlDzbOFguRc527UpQ=", false, function() {
+  return [useThemeStore, useThemeStore, useFormStore, useFormStore, useFormStore, useSensors, useSensor, useSensor];
 });
-_c8 = Index;
-var _c8;
-$RefreshReg$(_c8, "Index");
+_c9 = Index;
+var _c9;
+$RefreshReg$(_c9, "Index");
 window.$RefreshReg$ = prevRefreshReg;
 window.$RefreshSig$ = prevRefreshSig;
 export {
   Index as default
 };
-//# sourceMappingURL=/build/routes/_index-Q47EJDC4.js.map
+//# sourceMappingURL=/build/routes/_index-QWCA5UMT.js.map

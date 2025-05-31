@@ -6,6 +6,8 @@ export function FormPreview() {
   const fields = useFormStore((s) => s.fields);
   const [values, setValues] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  console.log("🔄 FormPreview"); 
+
 
   const validate = (f: FieldConfig, v: any): string => {
     if (f.required && !v) return "This field is required.";
@@ -35,7 +37,6 @@ export function FormPreview() {
             {f.label} {f.required && <span className="text-red-500">*</span>}
           </label>
 
-          {/* Input by type */}
           {f.type === "text" && (
             <input
               type="text"

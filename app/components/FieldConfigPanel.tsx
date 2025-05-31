@@ -1,16 +1,20 @@
 import { useFormStore } from "~/stores/form";
-import { FieldConfig } from "~/types/field";
+import type { FieldConfig } from "~/types/field";
 
 export function FieldConfigPanel() {
-  const selectedId = useFormStore((s) => s.selectedId);
+  const selectedFieldId = useFormStore((s) => s.selectedFieldId);
   const field = useFormStore((s) =>
-    s.fields.find((f) => f.id === selectedId)
+    s.fields.find((f) => f.id === selectedFieldId)
   );
-  const update = useFormStore((s) => s.updateField);
+  console.log("🔄 [FieldConfigPanel] render");  // <--- add this
+
+  const updateField = useFormStore((s) => s.updateField);
 
   if (!field) {
     return (
-      <div className="p-2 text-gray-500">Select a field to edit its properties</div>
+      <div className="p-2 text-gray-500 dark:text-gray-400">
+        Select a field to edit its properties
+      </div>
     );
   }
 
@@ -21,61 +25,57 @@ export function FieldConfigPanel() {
         key === "required"
           ? (e.target as HTMLInputElement).checked
           : e.target.value;
-      update(field.id, { [key]: value } as any);
+      updateField(field.id, { [key]: value } as any);
     };
 
   return (
-    <div className="p-2 space-y-4">
-      <h3 className="font-semibold">Field Properties</h3>
+    <div className="p-2 bg-white dark:bg-gray-800 rounded shadow space-y-4">
+      <h3 className="text-lg font-semibold">Field Properties</h3>
 
-      {/* Label */}
       <div>
         <label className="block text-sm">Label</label>
         <input
           type="text"
           value={field.label}
           onChange={onChange("label")}
-          className="mt-1 block w-full border rounded p-1"
+          className="mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700"
         />
       </div>
 
-      {/* Placeholder */}
-      {field.type !== "checkbox" && (
+      {["text", "textarea"].includes(field.type) && (
         <div>
           <label className="block text-sm">Placeholder</label>
           <input
             type="text"
-            value={field.placeholder}
+            value={field.placeholder || ""}
             onChange={onChange("placeholder")}
-            className="mt-1 block w-full border rounded p-1"
+            className="mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700"
           />
         </div>
       )}
 
-      {/* Required */}
       <div className="flex items-center">
         <input
-          id="required"
           type="checkbox"
-          checked={field.required}
+          id="required"
+          checked={field.required || false}
           onChange={onChange("required")}
+          className="mr-2"
         />
-        <label htmlFor="required" className="ml-2 text-sm">
+        <label htmlFor="required" className="text-sm">
           Required
         </label>
       </div>
 
-      {/* Help Text */}
       <div>
         <label className="block text-sm">Help Text</label>
         <textarea
-          value={field.helpText}
+          value={field.helpText || ""}
           onChange={onChange("helpText")}
-          className="mt-1 block w-full border rounded p-1"
+          className="mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700"
         />
       </div>
 
-      {/* Min/Max Length & Pattern (text, textarea) */}
       {["text", "textarea"].includes(field.type) && (
         <>
           <div className="flex space-x-2">
@@ -85,9 +85,11 @@ export function FieldConfigPanel() {
                 type="number"
                 value={field.minLength || ""}
                 onChange={(e) =>
-                  update(field.id, { minLength: +e.target.value } as any)
+                  updateField(field.id, {
+                    minLength: +e.target.value,
+                  } as any)
                 }
-                className="mt-1 block w-full border rounded p-1"
+                className="mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700"
               />
             </div>
             <div>
@@ -96,9 +98,11 @@ export function FieldConfigPanel() {
                 type="number"
                 value={field.maxLength || ""}
                 onChange={(e) =>
-                  update(field.id, { maxLength: +e.target.value } as any)
+                  updateField(field.id, {
+                    maxLength: +e.target.value,
+                  } as any)
                 }
-                className="mt-1 block w-full border rounded p-1"
+                className="mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700"
               />
             </div>
           </div>
@@ -108,13 +112,12 @@ export function FieldConfigPanel() {
               type="text"
               value={field.pattern || ""}
               onChange={onChange("pattern")}
-              className="mt-1 block w-full border rounded p-1"
+              className="mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700"
             />
           </div>
         </>
       )}
 
-      {/* Options (dropdown, checkbox) */}
       {["dropdown", "checkbox"].includes(field.type) && (
         <div>
           <label className="block text-sm">Options (comma-separated)</label>
@@ -122,13 +125,16 @@ export function FieldConfigPanel() {
             type="text"
             value={field.options?.map((o) => o.label).join(", ") || ""}
             onChange={(e) =>
-              update(field.id, {
+              updateField(field.id, {
                 options: e.target.value
                   .split(",")
-                  .map((s) => ({ label: s.trim(), value: s.trim().toLowerCase().replace(/\s+/g, "_") })),
+                  .map((s) => ({
+                    label: s.trim(),
+                    value: s.trim().toLowerCase().replace(/\s+/g, "_"),
+                  })),
               } as any)
             }
-            className="mt-1 block w-full border rounded p-1"
+            className="mt-1 block w-full border rounded p-1 bg-gray-50 dark:bg-gray-700"
           />
         </div>
       )}
